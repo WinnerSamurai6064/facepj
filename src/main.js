@@ -58,22 +58,31 @@ async function initCamera() {
   recorderApi = setupRecorder(canvas, setStatus);
 }
 
-async function initTracker() {
-  const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-  );
-
-  faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+async function createTracker(vision, delegate) {
+  return FaceLandmarker.createFromOptions(vision, {
     baseOptions: {
       modelAssetPath:
         "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
-      delegate: "GPU"
+      delegate
     },
     runningMode: "VIDEO",
     numFaces: 1,
     outputFaceBlendshapes: true,
     outputFacialTransformationMatrixes: true
   });
+}
+
+async function initTracker() {
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+  );
+
+  try {
+    faceLandmarker = await createTracker(vision, "GPU");
+  } catch (error) {
+    console.warn("GPU delegate failed; falling back to CPU.", error);
+    faceLandmarker = await createTracker(vision, "CPU");
+  }
 }
 
 function drawCameraFrame() {
