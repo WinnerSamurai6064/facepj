@@ -7,15 +7,14 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import cv2
-import mediapipe as mp
 import numpy as np
 from flask import Flask, Response, jsonify, request, send_from_directory
+from mediapipe.python.solutions import face_mesh as mp_face_mesh
 from PIL import Image, ImageDraw
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
-mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=False,
     max_num_faces=1,
@@ -143,7 +142,6 @@ def process_frame(frame_bgr: np.ndarray, mask_scale: float = 1.35) -> Tuple[np.n
     height, width = frame_bgr.shape[:2]
     rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
-    # MediaPipe FaceMesh can be fragile when called from overlapping threads.
     with process_lock:
         result = face_mesh.process(rgb)
 
@@ -254,5 +252,4 @@ def process():
 
 
 if __name__ == "__main__":
-    # Single threaded keeps MediaPipe stable on tiny HF CPU spaces.
     app.run(host="0.0.0.0", port=7860, threaded=False)
