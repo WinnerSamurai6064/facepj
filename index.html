@@ -3,29 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FacePJ Live Mask</title>
+    <title>FacePJ Python Mask</title>
     <style>
       :root {
         color-scheme: dark;
         --bg: #050505;
-        --panel: rgba(18, 18, 18, 0.72);
+        --panel: rgba(18, 18, 18, 0.76);
         --line: rgba(255, 255, 255, 0.14);
         --text: #f7f7f7;
         --muted: rgba(255, 255, 255, 0.66);
         --hot: #ff7a1a;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
         min-height: 100vh;
-        background: radial-gradient(circle at 50% 0%, #221104 0%, var(--bg) 44%);
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 0%, #241003 0%, var(--bg) 45%);
         color: var(--text);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        overflow: hidden;
       }
 
       #stage {
@@ -35,23 +33,20 @@
         place-items: center;
       }
 
-      #video {
-        display: none;
-      }
+      video { display: none; }
 
-      #canvas {
+      canvas {
         width: 100vw;
         height: 100vh;
         object-fit: cover;
         background: #000;
       }
 
-      .topbar,
-      .controls {
+      .topbar, .controls {
         position: fixed;
         left: 12px;
         right: 12px;
-        z-index: 5;
+        z-index: 10;
         display: flex;
         gap: 10px;
         align-items: center;
@@ -59,17 +54,10 @@
         flex-wrap: wrap;
       }
 
-      .topbar {
-        top: 12px;
-      }
+      .topbar { top: 12px; }
+      .controls { bottom: 16px; }
 
-      .controls {
-        bottom: 16px;
-      }
-
-      .pill,
-      button,
-      label.file-pill {
+      .pill, button, label.file-pill {
         border: 1px solid var(--line);
         background: var(--panel);
         color: var(--text);
@@ -77,7 +65,7 @@
         padding: 11px 14px;
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
       }
 
       .pill {
@@ -85,16 +73,15 @@
         color: var(--muted);
       }
 
-      button,
-      label.file-pill {
+      button, label.file-pill {
         cursor: pointer;
-        font-weight: 800;
+        font-weight: 850;
         font-size: 14px;
       }
 
       button.primary {
-        background: linear-gradient(135deg, rgba(255, 122, 26, 0.95), rgba(255, 173, 64, 0.72));
-        color: #120701;
+        background: linear-gradient(135deg, rgba(255, 122, 26, 0.96), rgba(255, 174, 64, 0.78));
+        color: #130700;
         border-color: rgba(255, 255, 255, 0.28);
       }
 
@@ -107,7 +94,7 @@
       }
 
       .range {
-        min-width: 170px;
+        min-width: 190px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -115,30 +102,19 @@
 
       .range span {
         font-size: 12px;
-        color: var(--muted);
         white-space: nowrap;
+        color: var(--muted);
       }
 
       input[type="range"] {
-        accent-color: var(--hot);
         width: 100%;
+        accent-color: var(--hot);
       }
 
       @media (max-width: 560px) {
-        .topbar {
-          justify-content: flex-start;
-        }
-
-        .controls {
-          justify-content: space-between;
-        }
-
-        button,
-        label.file-pill {
-          flex: 1;
-          text-align: center;
-          padding-inline: 10px;
-        }
+        .topbar { justify-content: flex-start; }
+        .controls { justify-content: space-between; }
+        button, label.file-pill { flex: 1; text-align: center; padding-inline: 10px; }
       }
     </style>
   </head>
@@ -150,12 +126,12 @@
     </main>
 
     <section class="topbar">
-      <div class="pill" id="status">Loading FacePJ...</div>
+      <div class="pill" id="status">Python engine ready</div>
       <label class="file-pill" for="maskInput">Upload mask image</label>
       <input id="maskInput" type="file" accept="image/png,image/jpeg,image/webp" />
       <div class="pill range">
         <span>Mask size</span>
-        <input id="scaleInput" type="range" min="90" max="175" value="132" />
+        <input id="scaleInput" type="range" min="95" max="175" value="135" />
       </div>
     </section>
 
@@ -165,6 +141,170 @@
       <button id="stopBtn">Stop & save</button>
     </section>
 
-    <script type="module" src="/src/main.js"></script>
+    <script>
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d", { alpha: false });
+      const statusEl = document.getElementById("status");
+      const startBtn = document.getElementById("startBtn");
+      const recordBtn = document.getElementById("recordBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const maskInput = document.getElementById("maskInput");
+      const scaleInput = document.getElementById("scaleInput");
+
+      let running = false;
+      let busy = false;
+      let recorder = null;
+      let chunks = [];
+      let processTimer = null;
+      let processedImage = new Image();
+      let frameCanvas = document.createElement("canvas");
+      let frameCtx = frameCanvas.getContext("2d", { alpha: false });
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function syncSize() {
+        const width = video.videoWidth || 640;
+        const height = video.videoHeight || 480;
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+          frameCanvas.width = width;
+          frameCanvas.height = height;
+        }
+      }
+
+      function drawRawCamera() {
+        syncSize();
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+
+      function captureFrameDataUrl() {
+        syncSize();
+        frameCtx.save();
+        frameCtx.translate(frameCanvas.width, 0);
+        frameCtx.scale(-1, 1);
+        frameCtx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+        frameCtx.restore();
+        return frameCanvas.toDataURL("image/jpeg", 0.68);
+      }
+
+      async function processOneFrame() {
+        if (!running || busy || !video.videoWidth) return;
+        busy = true;
+
+        try {
+          const image = captureFrameDataUrl();
+          const maskScale = Number(scaleInput.value) / 100;
+          const res = await fetch("/api/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image, maskScale })
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || "processing failed");
+
+          processedImage.onload = () => {
+            ctx.drawImage(processedImage, 0, 0, canvas.width, canvas.height);
+          };
+          processedImage.src = data.image;
+          setStatus(data.found ? "Python face locked" : "Python searching for face...");
+        } catch (error) {
+          console.error(error);
+          drawRawCamera();
+          setStatus("Python frame failed; showing camera");
+        } finally {
+          busy = false;
+        }
+      }
+
+      async function startCamera() {
+        startBtn.disabled = true;
+        setStatus("Starting camera...");
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 480 },
+            height: { ideal: 360 },
+            frameRate: { ideal: 18, max: 24 }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await new Promise((resolve) => { video.onloadedmetadata = resolve; });
+        running = true;
+        syncSize();
+        drawRawCamera();
+
+        processTimer = setInterval(processOneFrame, 120);
+        setStatus("Camera started — upload a mask image");
+      }
+
+      maskInput.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const form = new FormData();
+        form.append("mask", file);
+
+        setStatus("Uploading mask to Python...");
+        const res = await fetch("/api/mask", { method: "POST", body: form });
+        const data = await res.json();
+        setStatus(data.ok ? `Mask loaded: ${file.name}` : "Mask upload failed");
+      });
+
+      startBtn.addEventListener("click", async () => {
+        try { await startCamera(); }
+        catch (error) {
+          console.error(error);
+          startBtn.disabled = false;
+          setStatus("Camera failed. Check permission / HTTPS.");
+        }
+      });
+
+      function pickMimeType() {
+        return ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
+          .find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      }
+
+      recordBtn.addEventListener("click", () => {
+        if (!running) {
+          setStatus("Start camera first.");
+          return;
+        }
+
+        chunks = [];
+        const stream = canvas.captureStream(24);
+        const mimeType = pickMimeType();
+        recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) chunks.push(event.data);
+        };
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `facepj-python-${Date.now()}.webm`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          setStatus("Recording saved locally");
+        };
+        recorder.start(250);
+        setStatus("Recording processed canvas...");
+      });
+
+      stopBtn.addEventListener("click", () => {
+        if (recorder && recorder.state !== "inactive") recorder.stop();
+      });
+    </script>
   </body>
 </html>
