@@ -71,6 +71,10 @@
       .pill {
         font-size: 13px;
         color: var(--muted);
+        max-width: min(92vw, 640px);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       button, label.file-pill {
@@ -115,6 +119,7 @@
         .topbar { justify-content: flex-start; }
         .controls { justify-content: space-between; }
         button, label.file-pill { flex: 1; text-align: center; padding-inline: 10px; }
+        .range { min-width: 100%; }
       }
     </style>
   </head>
@@ -157,9 +162,12 @@
       let recorder = null;
       let chunks = [];
       let processTimer = null;
-      let processedImage = new Image();
+      let lastObjectUrl = null;
       let frameCanvas = document.createElement("canvas");
       let frameCtx = frameCanvas.getContext("2d", { alpha: false });
+
+      const SEND_WIDTH = 320;
+      const SEND_HEIGHT = 240;
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -171,8 +179,10 @@
         if (canvas.width !== width || canvas.height !== height) {
           canvas.width = width;
           canvas.height = height;
-          frameCanvas.width = width;
-          frameCanvas.height = height;
+        }
+        if (frameCanvas.width !== SEND_WIDTH || frameCanvas.height !== SEND_HEIGHT) {
+          frameCanvas.width = SEND_WIDTH;
+          frameCanvas.height = SEND_HEIGHT;
         }
       }
 
@@ -185,14 +195,25 @@
         ctx.restore();
       }
 
-      function captureFrameDataUrl() {
-        syncSize();
-        frameCtx.save();
-        frameCtx.translate(frameCanvas.width, 0);
-        frameCtx.scale(-1, 1);
-        frameCtx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
-        frameCtx.restore();
-        return frameCanvas.toDataURL("image/jpeg", 0.68);
+      function captureFrameBlob() {
+        return new Promise((resolve) => {
+          syncSize();
+          frameCtx.save();
+          frameCtx.translate(frameCanvas.width, 0);
+          frameCtx.scale(-1, 1);
+          frameCtx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+          frameCtx.restore();
+          frameCanvas.toBlob(resolve, "image/jpeg", 0.62);
+        });
+      }
+
+      async function readError(response) {
+        try {
+          const data = await response.json();
+          return data.error || JSON.stringify(data);
+        } catch (_) {
+          return await response.text();
+        }
       }
 
       async function processOneFrame() {
@@ -200,25 +221,44 @@
         busy = true;
 
         try {
-          const image = captureFrameDataUrl();
-          const maskScale = Number(scaleInput.value) / 100;
-          const res = await fetch("/api/process", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image, maskScale })
-          });
-          const data = await res.json();
-          if (!data.ok) throw new Error(data.error || "processing failed");
+          const blob = await captureFrameBlob();
+          if (!blob) throw new Error("browser could not create JPEG frame");
 
-          processedImage.onload = () => {
-            ctx.drawImage(processedImage, 0, 0, canvas.width, canvas.height);
+          const form = new FormData();
+          form.append("frame", blob, "frame.jpg");
+          form.append("maskScale", String(Number(scaleInput.value) / 100));
+
+          const res = await fetch("/api/process_blob", {
+            method: "POST",
+            body: form
+          });
+
+          if (!res.ok) {
+            throw new Error(await readError(res));
+          }
+
+          const outputBlob = await res.blob();
+          const found = res.headers.get("X-Face-Found") === "1";
+          const url = URL.createObjectURL(outputBlob);
+          const img = new Image();
+
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+            lastObjectUrl = url;
           };
-          processedImage.src = data.image;
-          setStatus(data.found ? "Python face locked" : "Python searching for face...");
+
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            throw new Error("browser could not decode processed JPEG");
+          };
+
+          img.src = url;
+          setStatus(found ? "Python face locked" : "Python searching for face...");
         } catch (error) {
           console.error(error);
           drawRawCamera();
-          setStatus("Python frame failed; showing camera");
+          setStatus(`Python error: ${error.message || error}`);
         } finally {
           busy = false;
         }
@@ -244,7 +284,8 @@
         syncSize();
         drawRawCamera();
 
-        processTimer = setInterval(processOneFrame, 120);
+        if (processTimer) clearInterval(processTimer);
+        processTimer = setInterval(processOneFrame, 180);
         setStatus("Camera started — upload a mask image");
       }
 
@@ -252,13 +293,19 @@
         const file = event.target.files?.[0];
         if (!file) return;
 
-        const form = new FormData();
-        form.append("mask", file);
+        try {
+          const form = new FormData();
+          form.append("mask", file);
 
-        setStatus("Uploading mask to Python...");
-        const res = await fetch("/api/mask", { method: "POST", body: form });
-        const data = await res.json();
-        setStatus(data.ok ? `Mask loaded: ${file.name}` : "Mask upload failed");
+          setStatus("Uploading mask to Python...");
+          const res = await fetch("/api/mask", { method: "POST", body: form });
+          if (!res.ok) throw new Error(await readError(res));
+          const data = await res.json();
+          setStatus(data.ok ? `Mask loaded: ${file.name}` : "Mask upload failed");
+        } catch (error) {
+          console.error(error);
+          setStatus(`Mask error: ${error.message || error}`);
+        }
       });
 
       startBtn.addEventListener("click", async () => {
@@ -282,7 +329,7 @@
         }
 
         chunks = [];
-        const stream = canvas.captureStream(24);
+        const stream = canvas.captureStream(18);
         const mimeType = pickMimeType();
         recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
         recorder.ondataavailable = (event) => {
