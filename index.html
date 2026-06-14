@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FacePJ Live Mask</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050505;
+        --panel: rgba(18, 18, 18, 0.72);
+        --line: rgba(255, 255, 255, 0.14);
+        --text: #f7f7f7;
+        --muted: rgba(255, 255, 255, 0.66);
+        --hot: #ff7a1a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at 50% 0%, #221104 0%, var(--bg) 44%);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+      }
+
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      #video {
+        display: none;
+      }
+
+      #canvas {
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        background: #000;
+      }
+
+      .topbar,
+      .controls {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        z-index: 5;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .topbar {
+        top: 12px;
+      }
+
+      .controls {
+        bottom: 16px;
+      }
+
+      .pill,
+      button,
+      label.file-pill {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 11px 14px;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+      }
+
+      .pill {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      button,
+      label.file-pill {
+        cursor: pointer;
+        font-weight: 800;
+        font-size: 14px;
+      }
+
+      button.primary {
+        background: linear-gradient(135deg, rgba(255, 122, 26, 0.95), rgba(255, 173, 64, 0.72));
+        color: #120701;
+        border-color: rgba(255, 255, 255, 0.28);
+      }
+
+      input[type="file"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .range {
+        min-width: 170px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .range span {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      input[type="range"] {
+        accent-color: var(--hot);
+        width: 100%;
+      }
+
+      @media (max-width: 560px) {
+        .topbar {
+          justify-content: flex-start;
+        }
+
+        .controls {
+          justify-content: space-between;
+        }
+
+        button,
+        label.file-pill {
+          flex: 1;
+          text-align: center;
+          padding-inline: 10px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main id="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+    </main>
+
+    <section class="topbar">
+      <div class="pill" id="status">Loading FacePJ...</div>
+      <label class="file-pill" for="maskInput">Upload mask image</label>
+      <input id="maskInput" type="file" accept="image/png,image/jpeg,image/webp" />
+      <div class="pill range">
+        <span>Mask size</span>
+        <input id="scaleInput" type="range" min="90" max="175" value="132" />
+      </div>
+    </section>
+
+    <section class="controls">
+      <button class="primary" id="startBtn">Start camera</button>
+      <button id="recordBtn">Record</button>
+      <button id="stopBtn">Stop & save</button>
+    </section>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
