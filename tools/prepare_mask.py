@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from PIL import Image, ImageOps, ImageDraw, ImageFilter
+
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 
 def fit_image(img: Image.Image, size: int) -> Image.Image:
@@ -42,16 +43,8 @@ def apply_soft_oval_alpha(img: Image.Image, feather: int) -> Image.Image:
 
     out = img.copy()
     existing_alpha = out.getchannel("A")
-    combined = ImageChops_multiply(existing_alpha, mask)
-    out.putalpha(combined)
+    out.putalpha(ImageChops.multiply(existing_alpha, mask))
     return out
-
-
-def ImageChops_multiply(a: Image.Image, b: Image.Image) -> Image.Image:
-    # Avoid importing the whole ImageChops namespace in older tiny Python envs.
-    from PIL import ImageChops
-
-    return ImageChops.multiply(a, b)
 
 
 def main() -> None:
@@ -70,10 +63,10 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     with Image.open(args.input) as img:
-      prepared = fit_image(img, args.size)
-      if args.oval:
-          prepared = apply_soft_oval_alpha(prepared, args.feather)
-      prepared.save(args.output, "PNG", optimize=True)
+        prepared = fit_image(img, args.size)
+        if args.oval:
+            prepared = apply_soft_oval_alpha(prepared, args.feather)
+        prepared.save(args.output, "PNG", optimize=True)
 
     print(f"Saved mask: {args.output}")
 
