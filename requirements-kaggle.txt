@@ -1,0 +1,10 @@
+# Kaggle-specific runtime for FacePJ Gradio.
+# Keep this separate from Docker/Hugging Face requirements so Kaggle installs stay predictable.
+
+gradio==4.44.1
+huggingface_hub==0.25.2
+mediapipe==0.10.14
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+Pillow==10.4.0
+imageio-ffmpeg==0.5.1
