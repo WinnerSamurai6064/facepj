@@ -3,10 +3,12 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
+ENV GRADIO_ANALYTICS_ENABLED=False
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
@@ -19,4 +21,4 @@ COPY . .
 
 EXPOSE 7860
 
-CMD ["python", "app.py"]
+CMD ["python", "app_gradio.py"]
