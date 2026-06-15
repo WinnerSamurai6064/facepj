@@ -1,4 +1,5 @@
 import math
+import os
 import tempfile
 import traceback
 from pathlib import Path
@@ -253,4 +254,11 @@ with gr.Blocks(css=CSS, title="FacePJ Gradio") as demo:
         video_button.click(process_video, [input_video, video_mask, video_scale, max_seconds], [output_video, video_status])
 
 if __name__ == "__main__":
-    demo.queue(max_size=8).launch(server_name="0.0.0.0", server_port=7860)
+    is_kaggle = bool(os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+    port = int(os.environ.get("PORT", "7860"))
+    demo.queue(max_size=8).launch(
+        server_name="0.0.0.0",
+        server_port=port,
+        share=is_kaggle,
+        show_error=True,
+    )
